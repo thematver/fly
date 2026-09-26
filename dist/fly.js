@@ -1,11 +1,11 @@
-import * as THREE from './assets/three.module.js?v=6';
+import * as THREE from './assets/three.module.js?v=7';
 
 // Low-poly Drosophila with a small rig.
 // root  – sits on the desk; feet are planted in root space (y = FOOT_Y).
 // body  – leans, rises, pitches and squashes; carries thorax, head, abdomen, wings.
 // legs  – six two-bone IK chains solved in root space every frame, so the body
-//         can move while the feet stay put. Knees bend outwards and up, away
-//         from the eyes.
+//         can move while the feet stay put. Knees bend outwards and up; the
+//         solver also swings a knee around the head if it would enter an eye.
 // Local axes: +X forward (head), +Y up, +Z the fly's right side.
 export const FOOT_Y = -0.72;
 
@@ -74,9 +74,14 @@ export function createFly() {
     rod(V(.1, .18, side * .04), V(.06, .4, side * .1), .006, mats.bristle, ant);
     antennae.push(ant);
   }
-  rod(V(.2, -.2, 0), V(.3, -.34, 0), .03, mats.leg, head); // proboscis
+  // Proboscis on its own pivot so it can extend (the "tasting" reflex).
+  const proboscis = new THREE.Group();
+  proboscis.position.set(.2, -.2, 0); proboscis.rotation.z = .62; head.add(proboscis);
+  rod(V(), V(0, -.17, 0), .03, mats.leg, proboscis);
+  orb(.045, V(0, -.19, 0), [1.3, .7, 1.1], mats.leg, 0, proboscis);
 
   // Macrochaetae on the thorax, halteres behind the wing roots.
+  const halteres = [];
   for (const side of [-1, 1]) {
     for (let i = 0; i < 6; i++) {
       const x = .32 - i * .14, z = side * (.12 + (i % 2) * .1);
@@ -84,8 +89,11 @@ export function createFly() {
       rod(r0, V(x - .26, r0.y + .2, z * 1.25), .01, mats.bristle, body);
     }
     rod(V(-.44, .34, side * .08), V(-.8, .5, side * .12), .009, mats.bristle, body);
-    rod(V(-.28, .12, side * .38), V(-.42, .1, side * .5), .012, mats.haltere, body);
-    orb(.05, V(-.44, .1, side * .52), [1, 1, 1], mats.haltere, 1, body);
+    const hal = new THREE.Group();
+    hal.position.set(-.28, .12, side * .38); body.add(hal);
+    rod(V(), V(-.14, -.02, side * .12), .012, mats.haltere, hal);
+    orb(.05, V(-.16, -.02, side * .14), [1, 1, 1], mats.haltere, 1, hal);
+    halteres.push({ pivot: hal, side });
   }
 
   // Wings folded back over the abdomen in a shallow V.
@@ -115,7 +123,7 @@ export function createFly() {
       const f = a => V(a[0], a[1], a[2] * side);
       const thick = kind === 'fore' ? 1.25 : 1;
       const leg = {
-        kind, side, len: [...cfg.len], hip: f(cfg.hip), pole: f(cfg.pole).normalize(),
+        kind, side, len: [...cfg.len], hip: f(cfg.hip), pole: f(cfg.pole).normalize(), poleBase: f(cfg.pole).normalize(),
         restTip: f(cfg.tip), restDir: f(cfg.dir).normalize(),
         femur: rod(V(), UP, .032 * thick, mats.leg, root),
         tibia: rod(V(), UP, .025 * thick, mats.leg, root),
@@ -128,9 +136,20 @@ export function createFly() {
     }
   }
 
-  const hipW = V(), poleW = V(), ankle = V(), knee = V(), d = V(), bend = V(), end = V();
+  const hipW = V(), poleW = V(), ankle = V(), knee = V(), d = V(), bend = V(), end = V(), mid = V(), away = V(), tmpA = V();
+  const kneeAt = (out, a, h) => out.copy(hipW).addScaledVector(d, a).addScaledVector(bend, h);
+  // How deep a point sits inside the avoid spheres (0 = clear); fills `away` with the push direction.
+  function intrusion(p, avoid, worst = 0) {
+    for (const s of avoid) {
+      tmpA.subVectors(p, s.c);
+      const dd = tmpA.length(), pen = s.r - dd;
+      if (pen > worst) { worst = pen; away.copy(tmpA).multiplyScalar(1 / (dd || 1e-4)); }
+    }
+    return worst;
+  }
   // Solve every leg towards leg.tip / leg.dir (both in root space).
-  function solveLegs() {
+  // avoid: optional [{c: Vector3 (root space), r}] – knees and shins swing around these (the eyes).
+  function solveLegs(avoid) {
     body.updateMatrix();
     for (const leg of Object.values(legs)) {
       const [L1, L2, L3] = leg.len;
@@ -146,17 +165,33 @@ export function createFly() {
       const h = Math.sqrt(Math.max(0, L1 * L1 - a * a));
       d.normalize();
       bend.copy(poleW).addScaledVector(d, -poleW.dot(d)).normalize();
-      knee.copy(hipW).addScaledVector(d, a).addScaledVector(bend, h);
+      kneeAt(knee, a, h);
+      if (avoid && leg.kind === 'fore') {
+        // Rotate the knee around the hip-ankle axis until the knee and both
+        // segment midpoints are outside the eyes (small steps, keeps continuity).
+        for (let i = 0; i < 8; i++) {
+          let pen = intrusion(knee, avoid);
+          mid.addVectors(hipW, knee).multiplyScalar(.5); pen = intrusion(mid, avoid, pen);
+          mid.addVectors(knee, ankle).multiplyScalar(.5); pen = intrusion(mid, avoid, pen);
+          if (pen <= 0) break;
+          away.addScaledVector(d, -away.dot(d));
+          bend.addScaledVector(away.normalize(), .45).addScaledVector(d, -bend.dot(d)).normalize();
+          kneeAt(knee, a, h);
+        }
+      }
       end.copy(ankle).addScaledVector(leg.dir, L3);
       poseRod(leg.femur, hipW, knee);
       poseRod(leg.tibia, knee, ankle);
       poseRod(leg.tarsus, ankle, end);
       leg.knee.position.copy(knee);
+      leg.kneeAt = leg.kneeAt || V(); leg.kneeAt.copy(knee);
+      leg.ankleAt = leg.ankleAt || V(); leg.ankleAt.copy(ankle);
+      leg.hipAt = leg.hipAt || V(); leg.hipAt.copy(hipW);
       leg.reached.copy(end); // where the tip really is after clamping
     }
   }
 
-  return { group: root, body, head, abdomen, belly, antennae, wings, legs, solveLegs, mats };
+  return { group: root, body, head, abdomen, belly, antennae, wings, halteres, proboscis, legs, solveLegs, mats };
 }
 
 export function poseRod(mesh, a, b) {

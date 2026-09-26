@@ -30,6 +30,8 @@ const S = window.__fly = {
   peek: false, safe: { top: 0, bottom: innerHeight },
   reduced, rec: Q.has('rec'), poster: Q.has('poster'), mobile: innerWidth < 801,
   countdownShort: '',
+  // ?seed=K fixes the shuffle of the thoughts inside the head, so a clip can be re-recorded identically.
+  seed: Q.has('seed') ? Number(Q.get('seed')) >>> 0 : null,
 };
 if (S.rec) app.dataset.rec = '';
 if (Q.has('mute')) audio.muted = true; // for testing
@@ -124,14 +126,39 @@ soundBtn.addEventListener('click', () => { if (audio.paused) play(true); else pa
 
 // Browsers only allow sound after a tap. Try anyway (some webviews allow it),
 // then start on the first tap or key press anywhere on the page.
-const gate = $('#gate');
+// The hint is a picture, not a button (pointer-events: none): any tap goes through
+// to the page. Keyboard and screen-reader users have the "запустить реплей" button.
+const gate = $('#gate'), dragHint = $('#drag-hint');
 function showGate() { if (S.state === 'idle' && !S.rec && !S.poster) { gate.hidden = false; placeGate(); } }
-function placeGate() { app.style.setProperty('--gate-y', Math.round(S.safe.bottom - (S.mobile ? 28 : 44)) + 'px'); }
-gate.addEventListener('click', e => { e.stopPropagation(); play(true); });
+// Centre of the hint: low in the free band between the header and the bottom UI,
+// and above whatever bottom block it would otherwise overlap at this width.
+function placeGate() {
+  const half = S.mobile ? 100 : 120, x0 = innerWidth / 2 - half, x1 = innerWidth / 2 + half;
+  let floor = S.safe.bottom;
+  for (const el of document.querySelectorAll('.neural, .actions')) {
+    const r = el.getBoundingClientRect();
+    if (r.height && r.right > x0 && r.left < x1) floor = Math.min(floor, r.top);
+  }
+  app.style.setProperty('--gate-y', Math.round(floor - (S.mobile ? 50 : 62)) + 'px');
+}
 function firstTouch(e) {
+  if (!dragHint.hidden) dragHint.hidden = true;
   if (e.type === 'pointerdown' && e.pointerType !== 'mouse') return; // touch activates on pointerup
-  if (e.target.closest('a, #sound, #peek, #share, #gate')) return;
-  if (audio.paused && !userPaused && S.state === 'idle') play(false);
+  if (e.target.closest('a, #sound, #peek, #share')) return;
+  if (audio.paused && !userPaused && S.state === 'idle') play(!gate.hidden);
+}
+// Once per browser, a few seconds into the first "signal lost": the scene can be turned.
+let turned = false, dragTimer = 0;
+world.addEventListener('pointermove', e => { if (e.buttons && S.dragged) turned = true; }, { passive: true });
+function offerDrag() {
+  if (turned || S.rec || S.poster || store.get('turn')) return;
+  clearTimeout(dragTimer);
+  dragTimer = setTimeout(() => {
+    if (turned || S.peek || S.state !== 'lost' || document.hidden) return;
+    store.set('turn', '1');
+    dragHint.hidden = false; placeGate();
+    dragTimer = setTimeout(() => { dragHint.hidden = true; }, 4200);
+  }, 5000);
 }
 ['pointerdown', 'pointerup', 'keydown'].forEach(t => document.addEventListener(t, firstTouch, { capture: true }));
 if (!S.poster && !S.rec && !store.get('ps', true) && (Q.get('state') || 'idle') === 'idle') {
@@ -144,6 +171,7 @@ audio.addEventListener('ended', () => {
   S.replays++; store.set('replays', S.replays);
   setState('lost');
   S.glitch?.(1);
+  offerDrag();
 });
 audio.addEventListener('error', () => { if (S.state === 'playing') setState('idle'); });
 
@@ -231,13 +259,18 @@ function togglePeek(on = !S.peek) {
   S.peek = on;
   if (on) app.dataset.peek = ''; else delete app.dataset.peek;
   peekBtn.textContent = on ? 'выйти из головы' : 'заглянуть в голову';
-  logEl.textContent = on ? '…' : '';
+  logEl.textContent = on ? 'OPTIC LOBE / ENTRY' : '';
   render();
   S.setPeek?.(on);
   S.onLayout?.();
 }
 peekBtn.addEventListener('click', () => { togglePeek(); if (S.peek && audio.paused && !userPaused && S.state === 'idle') play(false); });
-S.onThought = text => { if (S.peek) logEl.textContent = text; };
+// Inside the head the log is a decoder readout: `CELL 047 › малиновый раф` on every new thought
+// (scene.js calls this on each swap; no cell = a status line such as 'SIGNAL / DECAY').
+S.onThought = (text, cell) => {
+  if (!S.peek) return;
+  logEl.textContent = cell == null ? text : `CELL ${String(cell).padStart(3, '0')} › ${text.length > 22 ? text.slice(0, 22) + '…' : text}`;
+};
 
 /* ---------------------------------------------------------------- HUD */
 
@@ -339,7 +372,7 @@ function measure() {
   // On wide screens the HUD may overlap the fly's feet, like the reference frame.
   S.safe = S.poster ? { top: h * .22, bottom: h * .97 }
     : { top: title.bottom + 8, bottom: S.mobile ? bottom.top - 6 : Math.min(h, hud.top + hud.height * .45) };
-  if (typeof placeGate === 'function' && !gate.hidden) placeGate();
+  if (typeof placeGate === 'function' && !(gate.hidden && dragHint.hidden)) placeGate();
   // The SIGNAL LOST card sits high in the free band, clear of the fly's reach.
   app.style.setProperty('--line-y', Math.round(S.safe.top + (S.safe.bottom - S.safe.top) * (S.mobile ? .13 : .16)) + 'px');
   S.onLayout?.();
@@ -351,9 +384,9 @@ measure();
 const warm = () => { audio.preload = 'auto'; };
 if (window.requestIdleCallback) requestIdleCallback(warm, { timeout: 3000 }); else setTimeout(warm, 1500);
 
-// Every module URL carries the release version (?v=6), so a 404 cached during a deploy can't stick.
+// Every module URL carries the release version (?v=7), so a 404 cached during a deploy can't stick.
 // If the scene still fails to load, try once more past any cache before falling back.
-import('./scene.js?v=6').catch(() => import('./scene.js?v=6&retry=' + Date.now())).then(m => m.init(world, S)).then(() => {
+import('./scene.js?v=7').catch(() => import('./scene.js?v=7&retry=' + Date.now())).then(m => m.init(world, S)).then(() => {
   if (Q.has('peek')) togglePeek(true); // ?peek: start inside the head (for clips)
 }).catch(err => {
   console.error(err);

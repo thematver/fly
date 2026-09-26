@@ -117,8 +117,36 @@ p { margin: 0; }
 @keyframes glitch-idle-a { 0%, 3%, 100% { opacity: 0; } 1% { opacity: .9; clip-path: inset(12% 0 60% 0); transform: translate(-7px, 0); } 2% { opacity: .8; clip-path: inset(58% 0 18% 0); transform: translate(5px, 0); } }
 @keyframes glitch-idle-b { 0%, 3%, 100% { opacity: 0; } 1.5% { opacity: .7; clip-path: inset(36% 0 38% 0); transform: translate(6px, 0); } }
 
-.gate { position: absolute; z-index: 4; left: 50%; top: var(--gate-y, 62%); transform: translate(-50%, -50%); display: flex; align-items: center; gap: 10px; font: 600 16px var(--ui); color: #04101a; background: var(--cyan); border: 0; padding: 12px 18px; box-shadow: 4px 4px 0 #244d56; cursor: pointer; white-space: nowrap; animation: gate 1.4s steps(2) infinite; }
-@keyframes gate { 50% { background: #c9fff5; } }
+/* Hints: translucent pictograms over the scene, never buttons (taps go through to the page). */
+.hint { position: absolute; z-index: 4; left: 50%; top: var(--gate-y, 62%); transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 0; padding: 16px 34px 18px; pointer-events: none; user-select: none; -webkit-user-select: none; color: #e6fbf8; font: 500 15px/1.25 var(--ui); letter-spacing: .01em; white-space: nowrap; text-shadow: 0 1px 0 #050b16, 0 0 10px #050b16; background: radial-gradient(closest-side, #050b1675 35%, #050b1600); animation: hint-in .6s steps(3) .25s both; }
+.hint[hidden] { display: none; }
+.hint-ico { display: block; shape-rendering: crispEdges; overflow: visible; opacity: .9; }
+.hint-text { opacity: .8; }
+.hint .o { fill: #07111f; }
+.hint .f { fill: #eafffb; }
+.hint .c, .hint .r0, .hint .r1, .hint .r2 { fill: var(--cyan); }
+.hint .on-mouse { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .hint .on-touch { display: none; }
+  .hint svg.on-mouse { display: block; }
+  .hint span.on-mouse { display: inline; }
+}
+.hint-press { animation: hint-press 1.8s step-end infinite; }
+.hint .r0 { opacity: 0; animation: hint-r0 1.8s step-end infinite; }
+.hint .r1 { opacity: 0; animation: hint-r1 1.8s step-end infinite; }
+.hint .r2 { opacity: 0; animation: hint-r2 1.8s step-end infinite; }
+@keyframes hint-in { 0% { opacity: 0; } }
+@keyframes hint-press { 0%, 100% { transform: none; } 34% { transform: translate(0, 1px); } 46% { transform: none; } }
+@keyframes hint-r0 { 0%, 100% { opacity: 0; } 36% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes hint-r1 { 0%, 100% { opacity: 0; } 48% { opacity: .6; } 62% { opacity: 0; } }
+@keyframes hint-r2 { 0%, 100% { opacity: 0; } 60% { opacity: .3; } 74% { opacity: 0; } }
+.hint-swipe { animation: hint-swipe 2.2s step-end infinite; }
+.chev-l, .chev-r { opacity: .4; }
+.chev-l { animation: hint-chev-l 2.2s step-end infinite; }
+.chev-r { animation: hint-chev-r 2.2s step-end infinite; }
+@keyframes hint-swipe { 0%, 100% { transform: none; } 12% { transform: translate(-1px, 0); } 22% { transform: translate(-2px, 0); } 36% { transform: translate(-1px, 0); } 46% { transform: none; } 58% { transform: translate(1px, 0); } 68% { transform: translate(2px, 0); } 82% { transform: translate(1px, 0); } }
+@keyframes hint-chev-l { 0%, 100% { opacity: .4; } 12% { opacity: 1; } 40% { opacity: .4; } }
+@keyframes hint-chev-r { 0%, 100% { opacity: .4; } 58% { opacity: 1; } 86% { opacity: .4; } }
 button:focus-visible, a:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
 
 .toast { position: absolute; z-index: 6; left: 50%; top: 50%; transform: translate(-50%, -50%); background: #07101a; border: 1px solid #516a7b; padding: 14px 18px; font-size: 15px; line-height: 1.35; max-width: min(340px, calc(100% - 40px)); text-align: center; }
@@ -134,10 +162,39 @@ button:focus-visible, a:focus-visible { outline: 3px solid #fff; outline-offset:
 @keyframes pulse { 50% { box-shadow: 4px 4px 0 #244d56, 0 0 0 5px #80e8de66; background: #c9fff5; } }
 @keyframes blink { 50% { opacity: .35; } }
 
-/* Head mode: the HUD becomes a decoder readout. */
+/* Head mode: the HUD is a decoder readout (CELL 047 › …); the thought itself is the line in the middle. */
 [data-peek] .neural-body, [data-peek] .neural-foot { display: none; }
-[data-peek] .log { white-space: normal; min-height: 2.6em; font: 500 18px/1.3 var(--ui); color: #eafcfc; }
-[data-peek] .log::before { content: none; }
+[data-peek] .log { color: #d6f2f2; }
+[data-peek][data-state="lost"] .log { color: #ff8cc2; }
+
+/* Inside the head: the one thought you read, over the canvas and under the CRT lines (scene.js, Mind).
+   Hard cuts only. Pink is the only warm colour in the head. */
+.mind-fore { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; --px: 3px; }
+.mind-fore[hidden], .mf[hidden] { display: none !important; }
+.mf { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: max-content; max-width: min(86vw, 720px); font: 500 30px/1.2 var(--ui); color: #eafcfc; text-align: center; text-wrap: balance; overflow-wrap: break-word; text-shadow: 0 2px 0 #07051a, 0 0 14px #07051a, 0 0 4px #07051a; }
+.mf.is-under { color: #ff8cc2; }
+.mf.is-dim { opacity: .42; }
+.mf.is-after { opacity: .7; }
+.mf-l { position: relative; }
+.mf-p { display: inline-block; height: calc(var(--r) * var(--px)); width: auto; margin-right: .38em; image-rendering: pixelated; vertical-align: middle; flex: none; }
+.mf-caret { display: inline-block; width: 2px; height: .95em; margin-left: .08em; vertical-align: -.12em; background: currentColor; flex: none; }
+.mf-caret.off { visibility: hidden; }
+.mf-chip, .mf-search, .mf-bubble, .mf-notif, .mf-dialog { text-shadow: none; }
+.mf-chip, .mf-search { display: flex; align-items: center; padding: .14em .62em .2em; border: 2px solid #4a7c9c; border-radius: 999px; background: #0a1226e6; }
+.mf-search { border-color: #3d5a7a; padding-left: .5em; }
+.mf-chip.is-under { border-color: #ff8cc280; }
+.mf-bubble { padding: .2em .66em .26em; border-radius: .78em .78em .78em .18em; background: #232c3fee; color: #e6eef7; }
+.mf-bubble.is-out { border-radius: .78em .78em .18em .78em; background: #2f6fd6; color: #fff; }
+.mf-bubble.is-typing { color: #9fb0c8; }
+.mf-bubble.is-under { background: #140c1eee; color: #ff8cc2; box-shadow: inset 0 0 0 2px #ff8cc266; }
+.mf-notif { display: flex; align-items: center; padding: .4em .75em .44em .55em; border: 1px solid #2c3a52; border-radius: .5em; background: #101829f0; text-align: left; }
+.mf-dot { flex: none; width: .5em; height: .5em; margin-right: .45em; border-radius: .14em; }
+.mf-dialog { padding: .5em .85em .45em; border: 1px solid #34425c; border-radius: .45em; background: #111a2cf4; text-align: left; }
+.mf-dialog.is-under { border-color: #ff8cc255; }
+.mf-btns { display: flex; justify-content: flex-end; gap: 1.2em; margin-top: .45em; font-size: .6em; line-height: 1.2; }
+.mf-btns b { font-weight: 600; color: #4fc3f7; }
+.mf-btns b.off { color: #566079; }
+.mf.is-glitch { margin-left: 3px; text-shadow: -3px 0 #ff5ea8b3, 3px 0 #4fe0ffb3, 0 0 14px #07051a; }
 
 /* Recording mode (?rec): clean frame for vertical clips. */
 [data-rec] .actions, [data-rec] .socials, [data-rec] .peek, [data-rec] .release-date { display: none !important; }
@@ -182,13 +239,18 @@ button:focus-visible, a:focus-visible { outline: 3px solid #fff; outline-offset:
   .socials-m { display: flex; margin: 0 -6px 0 0; gap: 0; }
   .socials-m a { font-size: 13.5px; padding: 4px 6px; }
   .share { font-size: 13.5px; }
-  .gate { font-size: 15px; padding: 11px 16px; }
+  .hint { font-size: 14px; padding: 14px 28px 16px; }
+  /* Idle shows "▶ реплей": keep the presave title on one line next to it. */
+  .sound { padding: 0 14px; min-width: 56px; justify-content: center; }
+  .cta-main { gap: 16px; }
+  .buttons:has(#sound-text:not(:empty)) .cta small .long { display: none; }
   .crt { box-shadow: inset 0 0 80px 10px #120a2a70; }
   [data-peek] .neural { display: block; }
-  [data-peek] .log { min-height: 2.6em; font-size: 16px; }
+  .mind-fore { --px: 2px; }
+  .mf { font-size: 20px; line-height: 1.25; }
 }
 @media (max-width: 370px) {
-  .cta small .long { display: none; }
+  .cta small .long, #sound-text { display: none; }
 }
 @media (max-width: 800px) and (max-height: 700px) {
   .socials-m { display: none; }
@@ -208,5 +270,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid #fff; outline-offset:
 }
 @media (prefers-reduced-motion: reduce) {
   [data-state="lost"] .cta, [data-state="lost"] #neural-title, .lost-line, .lost-line::before, .lost-line::after { animation: none !important; }
+  .hint, .hint * { animation: none !important; }
+  .hint .r0 { opacity: .9; } .hint .r1 { opacity: .55; } .hint .r2 { opacity: .25; }
   #world canvas { transition: none; }
 }
