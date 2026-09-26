@@ -1,6 +1,6 @@
-import * as THREE from './assets/three.module.js';
-import { createFly, FOOT_Y } from './fly.js';
-import { THOUGHTS } from './thoughts.js';
+import * as THREE from './assets/three.module.js?v=6';
+import { createFly, FOOT_Y } from './fly.js?v=6';
+import { THOUGHTS } from './thoughts.js?v=6';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const clamp = THREE.MathUtils.clamp;

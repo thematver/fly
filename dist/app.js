@@ -351,7 +351,9 @@ measure();
 const warm = () => { audio.preload = 'auto'; };
 if (window.requestIdleCallback) requestIdleCallback(warm, { timeout: 3000 }); else setTimeout(warm, 1500);
 
-import('./scene.js?v=5').then(m => m.init(world, S)).then(() => {
+// Every module URL carries the release version (?v=6), so a 404 cached during a deploy can't stick.
+// If the scene still fails to load, try once more past any cache before falling back.
+import('./scene.js?v=6').catch(() => import('./scene.js?v=6&retry=' + Date.now())).then(m => m.init(world, S)).then(() => {
   if (Q.has('peek')) togglePeek(true); // ?peek: start inside the head (for clips)
 }).catch(err => {
   console.error(err);
