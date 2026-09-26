@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#050b16">
+<title>начало конца — аноматвер, полина рыженко</title>
+<meta name="description" content="мозг мухи подключили к пресейву. «начало конца» — дуэт аноматвера и полины рыженко («хадн дадн»), первый сингл с нового альбома. 2 октября.">
+<!-- Site address: GitHub Pages for now. When the custom domain is attached, replace https://thematver.github.io/fly/ below (canonical, og:url, og:image, twitter:image). -->
+<link rel="canonical" href="https://thematver.github.io/fly/">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="ru_RU">
+<meta property="og:site_name" content="аноматвер">
+<meta property="og:url" content="https://thematver.github.io/fly/">
+<meta property="og:title" content="аноматвер, полина рыженко — начало конца">
+<meta property="og:description" content="мозг мухи подключили к пресейву. релиз 2 октября.">
+<meta property="og:image" content="https://thematver.github.io/fly/assets/og.jpg?v=2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="пиксельная муха за компьютером тянется к кнопке пресейва">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="аноматвер, полина рыженко — начало конца">
+<meta name="twitter:description" content="мозг мухи подключили к пресейву. релиз 2 октября.">
+<meta name="twitter:image" content="https://thematver.github.io/fly/assets/og.jpg?v=2">
+<link rel="icon" href="favicon.svg">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geologica:wght@400..700&family=Onest:wght@400..700&family=Press+Start+2P&display=swap">
+<link rel="stylesheet" href="style.css?v=5">
+<link rel="modulepreload" href="assets/three.module.js">
+</head>
+<body>
+<main id="app" data-state="idle">
+  <div id="world" role="img" aria-label="пиксельная муха за компьютером тянется к кнопке пресейва. сцену можно повернуть перетаскиванием"></div>
+  <div class="crt" aria-hidden="true"></div>
+
+  <header class="top">
+    <div class="title">
+      <h1 class="wordmark">начало конца</h1>
+      <p class="artists">аноматвер, полина рыженко</p>
+      <p class="tagline">эмуляция мозга дрозофилы. обучена одному действию.</p>
+    </div>
+    <div class="release">
+      <p class="release-label" id="release-label">до начала конца</p>
+      <p class="countdown" id="countdown"><time datetime="2026-10-02T00:00:00+03:00">2 октября</time></p>
+      <p class="release-date" id="release-date">2 октября · 00:00 мск</p>
+      <nav class="socials" aria-label="аноматвер в соцсетях и на площадках">
+        <a href="https://t.me/anomatver" rel="noopener">телеграм</a>
+        <a href="https://www.instagram.com/anomatver/" rel="noopener">инст</a>
+        <a href="https://vk.com/anomatver" rel="noopener">вк</a>
+        <a href="https://www.youtube.com/@anomatver" rel="noopener">ютуб</a>
+        <a href="https://www.tiktok.com/@anomatver" rel="noopener">тикток</a>
+        <span class="sep" aria-hidden="true">//</span>
+        <a href="https://music.yandex.ru/artist/9854860" rel="noopener">я.музыка</a>
+        <a href="https://open.spotify.com/artist/3Y5BfojDJBTpvotq3A1Nb0" rel="noopener">спотифай</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="bottom">
+    <section class="neural" aria-label="реплей активности мозга мухи">
+      <div class="neural-top">
+        <span id="neural-title">NEURAL REPLAY</span>
+        <span id="neural-time">00.00 S</span>
+      </div>
+      <div class="neural-body">
+        <div class="neural-number"><strong id="spikes">0.40M</strong><small>SPIKES / S</small></div>
+        <canvas id="neural" width="192" height="104" aria-hidden="true"></canvas>
+      </div>
+      <div class="neural-foot" aria-hidden="true"><span>139 255 NEURONS</span><span>96-CELL SPIKE RASTER</span></div>
+      <p class="log" id="log" aria-live="polite">AWAITING STIMULUS</p>
+      <button class="peek" id="peek" type="button">заглянуть в голову</button>
+    </section>
+
+    <div class="actions">
+      <div class="buttons">
+        <button id="sound" class="sound" type="button" aria-label="запустить реплей со звуком">
+          <span id="sound-icon" aria-hidden="true">▶</span><span id="sound-text">запустить реплей</span>
+        </button>
+        <a class="cta" id="cta" href="https://band.link/startend" rel="noopener">
+          <span class="cta-main"><span id="cta-text">сделать пресейв</span><svg class="ico ico-arrow" viewBox="0 0 8 7" aria-hidden="true"><path d="M2 0h5v1h-5zM4 1h3v1h-3zM3 2h4v1h-4zM2 3h3v1h-3zM6 3h1v1h-1zM1 4h3v1h-3zM6 4h1v1h-1zM0 5h3v1h-3zM1 6h1v1h-1z"/></svg></span>
+          <small id="cta-sub"><span class="long">трек сам </span>появится в медиатеке 2 октября</small>
+        </a>
+      </div>
+      <p class="inapp" id="inapp" hidden></p>
+      <div class="foot">
+        <button class="share" id="share" type="button">поделиться</button>
+        <nav class="socials socials-m" aria-label="аноматвер в соцсетях">
+          <a href="https://t.me/anomatver" rel="noopener">телеграм</a>
+          <a href="https://www.instagram.com/anomatver/" rel="noopener">инст</a>
+          <a href="https://vk.com/anomatver" rel="noopener">вк</a>
+          <a href="https://www.youtube.com/@anomatver" rel="noopener">ютуб</a>
+          <a href="https://www.tiktok.com/@anomatver" rel="noopener">тикток</a>
+        </nav>
+      </div>
+    </div>
+  </div>
+
+  <button class="gate" id="gate" type="button" hidden><svg class="ico" viewBox="0 0 8 7" aria-hidden="true"><path d="M0 0h2v1h-2zM0 1h4v1h-4zM0 2h6v1h-6zM0 3h8v1h-8zM0 4h6v1h-6zM0 5h4v1h-4zM0 6h2v1h-2z"/></svg> нажми куда угодно · будет звук</button>
+  <p class="lost-line" id="lost-line" aria-live="polite" data-text="">муха не дотянулась.
+нажми пресейв за неё.</p>
+  <p class="toast" id="toast" role="status" hidden></p>
+  <p id="audio-error" class="toast" role="alert" hidden>звук не включился. нажми ещё раз и проверь беззвучный режим.</p>
+</main>
+<audio id="audio" src="assets/replay.mp3" preload="metadata" playsinline></audio>
+<script type="module" src="app.js?v=5"></script>
+</body>
+</html>

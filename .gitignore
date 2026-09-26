@@ -1,0 +1,5 @@
+.DS_Store
+# Excerpt variants for listening only: some contain the chorus. Never publish.
+excerpts/
+# Local hosting config of the Codex app.
+.openai/
