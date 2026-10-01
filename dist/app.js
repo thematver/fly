@@ -2,7 +2,13 @@
 // button keep working even if WebGL or the 3D module fails to load.
 
 const RELEASE = Date.parse('2026-10-02T00:00:00+03:00');
+// An hour before the release the fly dies: lies on its back, the HUD flatlines, the countdown keeps going.
+// After the release it stays dead until the visitor presses «слушать» and comes back: then it gets up and listens.
+const DEATH = Date.parse('2026-10-01T23:00:00+03:00');
 const PRESAVE = 'https://band.link/startend';
+// After the release the button leads to listening. BandLink turns the presave page into the release page
+// by itself; if the release gets its own smartlink, put it here.
+const LISTEN = 'https://band.link/startend';
 const METRIKA_ID = 0; // Яндекс Метрика: put the counter id here to count sound_on / presave_click / share
 const SHARE_TEXT = 'мозг мухи подключили к пресейву.';
 
@@ -16,6 +22,18 @@ const Q = new URLSearchParams(location.search);
 const UA = navigator.userAgent;
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+const pad = n => String(n).padStart(2, '0');
+// ?at=22:59:50 (or a full date, 2026-10-01T22:59:50+03:00) runs the page clock from that moment, for checks
+// and clips. A bare time is Moscow time: before noon means 2 October, after noon 1 October.
+const SKEW = (() => {
+  const a = (Q.get('at') || '').trim().replace(/ (\d{2}:?\d{2})$/, '+$1');
+  if (!a) return 0;
+  const m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(a);
+  const t = m ? Date.parse(`2026-10-0${+m[1] < 12 ? 2 : 1}T${pad(m[1])}:${m[2]}:${m[3] || '00'}+03:00`) : Date.parse(a);
+  return Number.isFinite(t) ? t - Date.now() : 0;
+})();
+const now = () => Date.now() + SKEW;
+
 const store = {
   get(k, session) { try { return (session ? sessionStorage : localStorage).getItem(k); } catch { return null; } },
   set(k, v, session) { try { (session ? sessionStorage : localStorage).setItem(k, v); } catch { /* private mode */ } },
@@ -23,7 +41,9 @@ const store = {
 
 // Shared state read by the scene every frame.
 const S = window.__fly = {
-  state: 'idle', live: false, t: 0, dur: 16.3, cut: 14.1, bpm: 125,
+  state: 'idle', live: false, t: 0, dur: 16.3, cut: 14.1, bpm: 125, now,
+  // died: past 23:00 (time-based). dead: lying there right now (died, and nobody has pressed «слушать» for it yet).
+  died: false, dead: false, listened: false,
   env: { low: 0, mid: 0, high: 0 }, fire: new Uint8Array(96),
   // ?replays=N fixes the attempt number (the gap shrinks with it) for recording clips.
   replays: Q.has('replays') ? Number(Q.get('replays')) || 0 : Number(store.get('replays')) || 0,
@@ -51,44 +71,63 @@ function source() {
   try { if (document.referrer) return new URL(document.referrer).hostname.replace(/^www\./, ''); } catch { /* ignore */ }
   return 'direct';
 }
-const presaveUrl = (() => {
-  const u = new URL(PRESAVE);
+function tagged(link) {
+  const u = new URL(link);
   u.searchParams.set('utm_source', source());
   u.searchParams.set('utm_medium', Q.get('utm_medium') || 'fly_site');
   u.searchParams.set('utm_campaign', Q.get('utm_campaign') || 'nachalo_konca');
   if (Q.get('utm_content')) u.searchParams.set('utm_content', Q.get('utm_content'));
   return u.href;
-})();
+}
+const presaveUrl = tagged(PRESAVE);
 cta.href = presaveUrl;
 // New tab only on desktop; in-app webviews often ignore _blank or open a blank view.
 if (!inApp && matchMedia('(pointer: fine)').matches) cta.target = '_blank';
 
-if (inApp) {
-  const hint = $('#inapp');
+// In-app webviews: the presave asks to sign in, the music apps don't open. Offer the real browser.
+function inAppHint(url, live) {
+  if (!inApp) return;
+  const hint = $('#inapp'), ask = live ? 'музыка не открывается?' : 'пресейв просит войти?';
   if (android) {
-    const intent = 'intent://' + presaveUrl.replace(/^https:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=' + encodeURIComponent(presaveUrl) + ';end';
-    hint.innerHTML = 'пресейв просит войти? <a href="' + intent + '">открой в chrome</a>';
+    const intent = 'intent://' + url.replace(/^https:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=' + encodeURIComponent(url) + ';end';
+    hint.innerHTML = ask + ' <a href="' + intent + '">открой в chrome</a>';
+    hint.querySelector('a').addEventListener('click', pressFor); // the same as the button: counts, and the fly reacts
   } else {
-    hint.textContent = ios ? 'пресейв просит войти? ⋯ → «открыть в браузере»' : 'пресейв просит войти? открой страницу в браузере';
+    hint.textContent = ask + (ios ? ' ⋯ → «открыть в браузере»' : ' открой страницу в браузере');
   }
   hint.hidden = false;
 }
+inAppHint(presaveUrl, false);
 
 /* ---------------------------------------------------------------- countdown */
 
-const pad = n => String(n).padStart(2, '0');
 function tick() {
-  const ms = RELEASE - Date.now();
+  const t = now(), ms = RELEASE - t;
+  if (t >= DEATH || Q.get('state') === 'dead') die();
   if (ms <= 0 || Q.get('state') === 'live') return goLive();
   const d = Math.floor(ms / 864e5), h = Math.floor(ms / 36e5) % 24, m = Math.floor(ms / 6e4) % 60, s = Math.floor(ms / 1e3) % 60;
   const clock = `${pad(h)}:${pad(m)}:${pad(s)}`;
   $('#countdown').textContent = d ? `${d} д ${clock}` : clock;
   S.countdownShort = d ? `${d}д ${pad(h)}:${pad(m)}` : `${pad(h)}:${pad(m)}:${pad(s)}`;
-  setTimeout(tick, 1000 - (Date.now() % 1000) + 10);
+  setTimeout(tick, 1000 - (t % 1000) + 10);
+}
+// The fly dies. With the page open at 23:00 it happens on screen (scene.js plays the fall);
+// opened later, it is already lying there.
+function die() {
+  if (S.died) return;
+  S.died = true;
+  render();
+  if (!S.poster) { glitchLine(); S.glitch?.(1); }
 }
 function goLive() {
+  die();
   S.live = true;
   app.dataset.live = '';
+  S.countdownShort = '';
+  const listen = new URL(tagged(LISTEN));
+  if (!Q.get('utm_content')) listen.searchParams.set('utm_content', 'listen'); // BandLink stats: listens apart from presaves
+  cta.href = listen.href;
+  inAppHint(cta.href, true);
   $('#release-label').textContent = 'конец начался';
   $('#countdown').textContent = '02.10.2026';
   $('#release-date').textContent = 'на всех площадках';
@@ -96,8 +135,8 @@ function goLive() {
   ctaSub.textContent = 'яндекс музыка, vk музыка, звук и другие';
   document.title = 'начало конца — аноматвер, полина рыженко · слушать';
   render();
+  if (S.dead && !S.poster) { glitchLine(); S.glitch?.(.8); } // 00:00 with the page open: the card flips to «включи за неё»
 }
-tick();
 
 /* ---------------------------------------------------------------- audio */
 
@@ -161,7 +200,7 @@ function offerDrag() {
   }, 5000);
 }
 ['pointerdown', 'pointerup', 'keydown'].forEach(t => document.addEventListener(t, firstTouch, { capture: true }));
-if (!S.poster && !S.rec && !store.get('ps', true) && (Q.get('state') || 'idle') === 'idle') {
+if (!S.poster && !S.rec && !store.get('ps', true) && ['idle', 'dead', 'live'].includes(Q.get('state') || 'idle')) {
   const p = audio.play();
   if (p && p.catch) p.catch(showGate); else showGate();
 }
@@ -189,13 +228,16 @@ addEventListener('pageshow', e => { if (e.persisted) { render(); checkReturn(); 
 
 /* ---------------------------------------------------------------- presave click */
 
-cta.addEventListener('click', () => {
-  goal('presave_click');
+cta.addEventListener('click', pressFor);
+function pressFor() {
+  goal(S.live ? 'listen_click' : 'presave_click');
   store.set('ps', '1', true);
+  // Pressed «слушать» for it: the fly gets up. Kept in memory too, in case storage is blocked.
+  if (S.live) { S.listened = true; store.set('ls', '1', true); }
   resumeLater = false;
   if (!audio.paused) { userPaused = true; audio.pause(); }
   setState('pressed');
-});
+}
 function checkReturn() { if (store.get('ps', true) && S.state !== 'pressed' && S.state !== 'playing') setState('pressed'); }
 
 /* ---------------------------------------------------------------- state & labels */
@@ -216,7 +258,7 @@ function setState(st) {
   S.state = st;
   app.dataset.state = st;
   render();
-  if (st === 'lost' && was !== 'lost') glitchLine();
+  if (st === 'lost' && was !== 'lost' && !S.dead) glitchLine();
   S.onLayout?.();
 }
 // The title card glitches in on the cut (once per SIGNAL LOST).
@@ -231,6 +273,10 @@ function glitchLine() {
 }
 function render() {
   const st = S.state;
+  // Dead from 23:00 on. After the release, pressing «слушать» brings it back (for this visit).
+  // ?poster keeps the share frame (alive, a hair short of the button).
+  const dead = S.died && !S.poster && !(S.live && (S.listened || store.get('ls', true)));
+  if (dead !== S.dead) { S.dead = dead; if (dead) app.dataset.dead = ''; else delete app.dataset.dead; }
   const labels = {
     idle: ['▶', 'запустить реплей', 'запустить реплей со звуком'],
     playing: ['❚❚', 'пауза', 'пауза'],
@@ -241,17 +287,25 @@ function render() {
   soundIcon.innerHTML = ICONS[labels[0]] || labels[0]; soundBtn.setAttribute('aria-label', labels[2]);
   // Phones: short label, so the presave button keeps its one line.
   soundText.textContent = innerWidth < 801 ? (st === 'idle' ? 'реплей' : '') : labels[1];
-  const line = st === 'pressed'
-    ? (S.live ? 'готово.\nмуха слушает.' : 'готово.\nмуха потирает лапки.')
-    : (S.live ? 'муха не дотянулась.\nвключи за неё.' : 'муха не дотянулась.\nнажми пресейв за неё.');
+  // Phones: three short lines instead of a long first one that would wrap on its own.
+  const gone = innerWidth < 801 ? 'муха померла\nза час до релиза.' : 'муха померла за час до релиза.';
+  const line = S.dead
+    ? (S.live ? gone + '\nпослушай трек за неё.' : st === 'pressed' || store.get('ps', true) ? 'готово.\nмуха не узнает.' : gone + '\nпоставь пресейв за неё.')
+    : st === 'pressed'
+      ? (S.live ? 'готово.\nмуха слушает.' : 'готово.\nмуха потирает лапки.')
+      : (S.live ? 'муха не дотянулась.\nвключи за неё.' : 'муха не дотянулась.\nнажми пресейв за неё.');
   if (lostLine.textContent !== line) { lostLine.textContent = line; lostLine.dataset.text = line; }
-  titleEl.textContent = S.peek ? 'INSIDE / 96 CELLS' : st === 'lost' ? 'SIGNAL LOST' : 'NEURAL REPLAY';
-  if (!S.peek) logEl.textContent = S.live && st !== 'playing' ? 'RELEASE / LIVE' : LOG[st] || logEl.textContent;
-  if (st === 'lost') { spikesEl.textContent = '0.00M'; }
+  titleEl.textContent = S.peek ? 'INSIDE / 96 CELLS' : S.dead ? 'FLATLINE' : st === 'lost' ? 'SIGNAL LOST' : 'NEURAL REPLAY';
+  if (!S.peek) logEl.textContent = S.dead ? (st === 'playing' ? 'STIMULUS / NO RESPONSE' : 'NO RESPONSE')
+    : S.died && S.live && st === 'pressed' ? 'SIGNAL / RESTORED'
+      : S.live && st !== 'playing' ? 'RELEASE / LIVE' : LOG[st] || logEl.textContent;
+  if (st === 'lost' || S.dead) { spikesEl.textContent = '0.00M'; }
 }
 setState(['lost', 'pressed', 'paused'].includes(Q.get('state')) ? Q.get('state') : 'idle');
 if (S.poster) setState('lost');
 checkReturn();
+// The clock starts once everything render() touches exists.
+tick();
 
 /* ---------------------------------------------------------------- inside the head */
 
@@ -290,9 +344,10 @@ function hud(now) {
   requestAnimationFrame(hud);
   if (now - hudLast < 33) return;
   hudLast = now;
-  const st = S.state, playing = st === 'playing';
-  S.t = st === 'idle' ? 0 : audio.currentTime || 0;
-  const e = playing ? sample(S.t) : { low: 0, mid: 0, high: 0 };
+  // A dead fly: the room still hears the music (S.env), the brain shows a flat line.
+  const st = S.dead ? 'lost' : S.state, playing = st === 'playing';
+  S.t = S.state === 'idle' ? 0 : audio.currentTime || 0;
+  const e = S.state === 'playing' ? sample(S.t) : { low: 0, mid: 0, high: 0 };
   S.env = e;
   const energy = .5 * e.low + .3 * e.mid + .2 * e.high;
 
@@ -302,7 +357,7 @@ function hud(now) {
   let spikes = st === 'lost' ? 0 : tail ? 2.6 * (1 - (S.t - S.cut) / (S.dur - S.cut)) : playing ? .55 + 2.1 * energy + (S.t > S.cut - .5 ? .7 : 0) : .4 + Math.sin(now / 900) * .02;
   spikesShown += (spikes - spikesShown) * .35;
   spikesEl.textContent = spikesShown.toFixed(2) + 'M';
-  if (playing && !S.peek) {
+  if (playing && !S.peek && !S.dead) {
     const pct = Math.min(99, Math.round(Math.max(0, (S.t - .5) / (S.cut - .5)) * 99));
     logEl.textContent = tail ? 'SIGNAL / DECAY' : S.t < 2.4 ? 'STIMULUS / DETECTED' : S.t > S.cut - 2 ? 'MOTOR_06 / REACH 99%' : `MOTOR_06 / REACH ${pad(pct)}%`;
   }
@@ -366,27 +421,40 @@ if (METRIKA_ID) {
 
 function measure() {
   const h = innerHeight;
+  S.mobile = innerWidth < 801;
   const title = (S.mobile ? $('.top') : $('.title')).getBoundingClientRect();
   const hud = $('.neural').getBoundingClientRect(), bottom = $('.bottom').getBoundingClientRect();
-  S.mobile = innerWidth < 801;
   // On wide screens the HUD may overlap the fly's feet, like the reference frame.
   S.safe = S.poster ? { top: h * .22, bottom: h * .97 }
     : { top: title.bottom + 8, bottom: S.mobile ? bottom.top - 6 : Math.min(h, hud.top + hud.height * .45) };
   if (typeof placeGate === 'function' && !(gate.hidden && dragHint.hidden)) placeGate();
   // The SIGNAL LOST card sits high in the free band, clear of the fly's reach.
-  app.style.setProperty('--line-y', Math.round(S.safe.top + (S.safe.bottom - S.safe.top) * (S.mobile ? .13 : .16)) + 'px');
+  // Never closer to the header than half its own height: from 23:00 the card is up all the time, three lines on phones.
+  const lineY = Math.max(S.safe.top + lostLine.offsetHeight / 2 + 4, S.safe.top + (S.safe.bottom - S.safe.top) * (S.mobile ? .13 : .16));
+  app.style.setProperty('--line-y', Math.round(lineY) + 'px');
   S.onLayout?.();
 }
-new ResizeObserver(() => { measure(); render(); }).observe(document.body);
+// Fonts, responsive labels and the head-mode HUD can change the free scene area.
+// Apply labels before measuring, on the next frame outside ResizeObserver delivery.
+let layoutFrame = 0;
+const layoutObserver = new ResizeObserver(() => {
+  if (layoutFrame) return;
+  layoutFrame = requestAnimationFrame(() => {
+    layoutFrame = 0;
+    render();
+    measure();
+  });
+});
+[document.body, $('.top'), $('.bottom'), $('.neural'), lostLine].forEach(el => layoutObserver.observe(el));
 measure();
 
 // Start fetching the replay once the page is up, not before the first frame.
 const warm = () => { audio.preload = 'auto'; };
 if (window.requestIdleCallback) requestIdleCallback(warm, { timeout: 3000 }); else setTimeout(warm, 1500);
 
-// Every module URL carries the release version (?v=7), so a 404 cached during a deploy can't stick.
+// Every module URL carries the release version (?v=8), so a 404 cached during a deploy can't stick.
 // If the scene still fails to load, try once more past any cache before falling back.
-import('./scene.js?v=7').catch(() => import('./scene.js?v=7&retry=' + Date.now())).then(m => m.init(world, S)).then(() => {
+import('./scene.js?v=8').catch(() => import('./scene.js?v=8&retry=' + Date.now())).then(m => m.init(world, S)).then(() => {
   if (Q.has('peek')) togglePeek(true); // ?peek: start inside the head (for clips)
 }).catch(err => {
   console.error(err);

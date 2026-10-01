@@ -1,6 +1,6 @@
-import * as THREE from './assets/three.module.js?v=7';
-import { createFly, FOOT_Y } from './fly.js?v=7';
-import { THOUGHTS } from './thoughts.js?v=7';
+import * as THREE from './assets/three.module.js?v=8';
+import { createFly, FOOT_Y } from './fly.js?v=8';
+import { THOUGHTS } from './thoughts.js?v=8';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const clamp = THREE.MathUtils.clamp;
@@ -118,6 +118,7 @@ export async function init(world, S) {
   S.setPeek = on => cam.dive(on, mind);
 
   let last = performance.now(), lastDraw = 0, worldT = 0, failed = false;
+  post.uniforms.mono.value = S.dead ? 1 : 0; // dead: a black-and-white picture
   function frame(now) {
     if (failed) return;
     requestAnimationFrame(frame);
@@ -136,10 +137,14 @@ export async function init(world, S) {
       cam.update(dt, worldT, anim);
       post.uniforms.time.value = worldT;
       post.uniforms.exposure.value = 1.3 + anim.tail * .55;
-      if (S.state === 'lost' && !S.poster && Math.random() < dt * .35) S.glitch(.3);
+      if ((S.state === 'lost' || (S.dead && !S.reduced)) && !S.poster && Math.random() < dt * .35) S.glitch(.3);
       post.uniforms.glitch.value = Math.max(0, post.uniforms.glitch.value - dt * 1.6);
       post.uniforms.fade.value = cam.fade;
       post.uniforms.inside.value = cam.inside;
+      // The black-and-white filter clicks on as the fly hits the desk; the colour comes back as it gets up.
+      const monoTo = S.dead && anim.die > .6 ? 1 : 0;
+      if (monoTo && post.uniforms.mono.value < .5 && !S.reduced) S.glitch(.8);
+      post.uniforms.mono.value += (monoTo - post.uniforms.mono.value) * (1 - Math.exp(-dt * (monoTo ? 16 : 2.5)));
 
       renderer.setRenderTarget(target);
       if (cam.showMind) { mind.update(dt, worldT); renderer.render(mind.scene, mind.camera); }
@@ -212,7 +217,7 @@ function updateCues(S, dt) {
 function createPost(target) {
   const uniforms = {
     map: { value: target.texture }, res: { value: new THREE.Vector2(1, 1) },
-    time: { value: 0 }, glitch: { value: 0 }, fade: { value: 1 }, inside: { value: 0 },
+    time: { value: 0 }, glitch: { value: 0 }, fade: { value: 1 }, inside: { value: 0 }, mono: { value: 0 },
     levels: { value: 12 }, exposure: { value: 1.3 },
     tint: { value: new THREE.Vector3(1, 1, 1) }, lift: { value: new THREE.Vector3() }, vig: { value: .22 },
   };
@@ -220,7 +225,7 @@ function createPost(target) {
     uniforms, depthTest: false, depthWrite: false,
     vertexShader: 'varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}',
     fragmentShader: /* glsl */`
-      uniform sampler2D map; uniform vec2 res; uniform float time, glitch, fade, inside, levels, exposure, vig;
+      uniform sampler2D map; uniform vec2 res; uniform float time, glitch, fade, inside, levels, exposure, vig, mono;
       uniform vec3 tint, lift;
       varying vec2 vUv;
       float b2(vec2 a){a=floor(a);return fract(a.x/2.+a.y*a.y*.75);}
@@ -250,6 +255,7 @@ function createPost(target) {
           float rr=length(q)/min(1.,res.x/res.y);
           c*=mix(1.,smoothstep(1.45,1.18,rr),inside);
         }
+        if(mono>0.){float y=dot(c,vec3(.299,.587,.114));c=mix(c,vec3(clamp((y-.5)*1.12+.5,0.,1.)),mono);}
         c=floor(c*levels+b4(gl_FragCoord.xy))/levels;
         gl_FragColor=vec4(c*fade,1.);
       }`,
@@ -366,7 +372,7 @@ function buildRoom(scene) {
       const e = S.env || {}, on = S.state === 'playing', hush = FX.hush, lost = FX.lost, flash = FX.flash;
       const neon = S.reduced ? 1 - .5 * hush : on
         ? (hush ? .3 + .25 * flick(t * 1.7, .6) : .8 + .45 * FX.kick + .2 * FX.build)
-        : flick(t, S.state === 'lost' ? .95 : .985) * (1 - .15 * lost);
+        : flick(t, S.state === 'lost' || S.dead ? .95 : .985) * (1 - .15 * lost);
       mats.pink.color.copy(PINK).multiplyScalar(neon);
       mats.edge.color.copy(EDGE).multiplyScalar(.85 + .35 * FX.kick + .6 * flash - .35 * hush);
       screenLight.intensity = 5 + glow * 5 + (on ? FX.kick * 5 + FX.tail * 8 : Math.sin(t * 7) * .3);
@@ -422,7 +428,7 @@ function buildScreen(scene, S) {
   // The countdown on the page ticks every second, like the real BandLink page.
   const RELEASE_MS = Date.parse('2026-10-02T00:00:00+03:00'), p2 = n => (n < 10 ? '0' : '') + n;
   const clock = () => {
-    const s = Math.max(0, Math.floor((RELEASE_MS - Date.now()) / 1000)), d = Math.floor(s / 86400);
+    const s = Math.max(0, Math.floor((RELEASE_MS - S.now()) / 1000)), d = Math.floor(s / 86400);
     return (d ? d + ' д ' : '') + p2(Math.floor(s / 3600) % 24) + ':' + p2(Math.floor(s / 60) % 60) + ':' + p2(s % 60);
   };
   let lastKey = -1, lastSec = -1, acc = 0;
@@ -489,7 +495,7 @@ function buildScreen(scene, S) {
       api.glow = touch ? 1 : near * .6;
       // Numeric keys: no string building every frame.
       const key = (touch ? 1 : 0) + (S.live ? 2 : 0) + (coverReady ? 4 : 0) + (fontReady ? 8 : 0) + Math.round(near * 10) * 16;
-      const sec = Math.floor(Date.now() / 1000);
+      const sec = Math.floor(S.now() / 1000);
       if (api.dirty || ((key !== lastKey || sec !== lastSec) && acc > .08)) {
         paint(touch, near); api.dirty = false; lastKey = key; lastSec = sec; acc = 0;
       }
@@ -740,8 +746,9 @@ function createCameraRig(camera, F, screen, S) {
     rig.p = Math.min(1, rig.p + dt / (rig.mode === 'mind' ? .6 : 1.1));
     const p = smooth(rig.p);
     if (rig.mode === 'diving' || rig.mode === 'surfacing') {
-      F.localToWorld(eye.set(.72, .2, .3));
-      F.localToWorld(eyeLook.set(1.6, .05, .1));
+      const zs = Math.cos(F.rotation.x) < 0 ? -1 : 1; // on its back the other eye faces the camera
+      F.localToWorld(eye.set(.72, .2, .3 * zs));
+      F.localToWorld(eyeLook.set(1.6, .05, .1 * zs));
       const into = rig.mode === 'diving' ? p : 1 - p;
       camera.position.lerp(eye, into * .97);
       camera.lookAt(tmp.copy(look).lerp(eyeLook, into));
@@ -819,6 +826,7 @@ const REST = {
   fL: 0, lk: 0, lext: .7, lg: 0, lh: 0, lw: 0,                      // left foreleg
   fH: 0, fHL: 0,                                                    // right hind cleans the wing / both hind legs rub
   rub: 1, paw: 1, ts: 1, push: 0, glow: 0, strain: 0,               // rub speed, paws per beat, time scale, camera push, tail glow, full stretch
+  die: 0, kick: 0, curl: 0,                                         // dead: rolled onto its back; legs flailing; legs curled up
 };
 // [stiffness, damping ratio]; channels not listed are used raw.
 const SPR = {
@@ -827,6 +835,7 @@ const SPR = {
   walk: [150, 1], ff: [300, 1], fR: [480, .85], rk: [900, .72], ext: [650, .8], rs: [200, 1], rg: [300, 1], rh: [300, 1], rw: [260, 1], rf: [900, 1],
   fL: [480, .85], lk: [500, .75], lext: [500, .8], lg: [300, 1], lh: [300, 1], lw: [260, 1], fH: [400, .9], fHL: [400, .9],
   rub: [300, 1], paw: [60, 1],
+  die: [110, .42], kick: [200, 1], curl: [40, 1],                   // the fall bounces and rocks on the back
 };
 
 // Keys: [time, duration, ease, {channels}]. Each channel gets its own track: a key moves
@@ -1001,16 +1010,56 @@ const PRESS = timeline([
 ]);
 const PRESS_END = 4.8;
 
+/* 23:00, an hour before the release: it dies. A jolt, a last buzz, a stagger, falls on its back,
+   the legs flail, slow down and curl up. Then it lies there; now and then a leg twitches. */
+const DIE = timeline([
+  [0, .07, 'snap', {
+    look: 0, hp: .14, an: .75, sq: .95, rise: -.02, fR: 0, fL: 0, rg: 0, lg: 0, rh: 0, lh: 0, rw: 0, lw: 0, rs: 0, rf: 0, fH: 0, fHL: 0,
+    rk: 0, lk: 0, ext: .7, lext: .7, prob: 0, ts: 1, push: 0, glow: 0, strain: 0, pump: 0, mf: 0, hf: 0, ff: 0, rub: 1, paw: 1, hy: 0,
+  }],                                                                    // the jolt
+  [.06, .08, 'snap', { wb: .9, wo: .22, wl: .3 }],                      // a last buzz
+  [.12, .3, 'io', { side: .05, roll: .2, lean: -.04, pitch: .05, hr: .28, abd: .12 }], // staggers
+  [.42, .05, 'lin', { wb: 0, wl: 0 }],
+  [.44, .28, 'in', { die: 1, kick: 1, br: 0 }],                          // falls on its back (the spring bounces it)
+  [.5, .25, 'io', { roll: 0, side: 0, lean: 0, rise: 0, pitch: 0, sq: 1, wo: .55, an: -.45, hp: -.28, hr: 0, abd: .1, prob: .8 }],
+  [1.1, 1.4, 'io', { kick: .35 }],                                       // the flailing slows down
+  [2.3, 1.3, 'in', { kick: 0, curl: 1 }],                               // the legs curl up and stop
+]);
+const DIE_END = 3.8;
+
+/* After the release, someone pressed «слушать» for it: the legs kick, it rolls over, stands up, shakes it off,
+   scissors the wings and rubs its paws. Then it listens (CONTENT). */
+const REVIVE = timeline([
+  [0, .1, 'snap', { kick: 1, curl: 0, an: .2 }],
+  [.12, .15, 'snap', { wb: .8, wo: .3 }],
+  [.62, .3, 'back', { die: 0, wb: 0, prob: 0, br: 1 }],                  // rolls over onto its feet
+  [.7, .3, 'io', { kick: 0, wo: 0, look: 1, hp: .1, an: .6, sq: .94, rise: -.04, hr: 0 }],
+  [1.05, .18, 'out', { sq: 1.04, rise: .03 }],                           // shakes it off
+  [1.25, .2, 'io', { sq: 1, rise: 0, an: 0 }],
+  [1.05, .5, 'io', { walk: W_DONE }],                                   // (until here it stays where it lay)
+  [1.45, .06, 'out', { wo: .5 }], [1.57, .08, 'io', { wo: 0 }], [1.69, .06, 'out', { wo: .45 }], [1.81, .08, 'io', { wo: 0 }],
+  [2.1, .2, 'io', { fR: 1, fL: 1, rg: 1, lg: 1, look: .3, hp: -.08 }],  // rubs its paws
+  [3.1, .2, 'io', { fR: 0, fL: 0, rg: 0, lg: 0, look: 1, hp: .05 }],
+]);
+const REVIVE_END = 3.5;
+// Dead legs, body space, from each hip: bent up over the belly (on its back that is up), claws in.
+const DEAD_LEG = { fore: [.22, -.6, .14], mid: [0, -.66, .2], hind: [-.2, -.6, .16] };
+const DEAD_ROLL = -(Math.PI - .3);   // on its back, the belly turned a little to the camera
+
 // Body-space targets near the face (right side; z is mirrored for the left leg).
 const READY = [.9, -.16, .44], COCK = [-.12, .2, .1], RUB = [1.0, -.5, .07];
 const SWEEP = [[-.04, .36, .36], [.24, .33, .34], [.42, .03, .3], [.3, -.26, .18]]; // head space, around the eye
 const EYES = [[.12, .05, .2, .3], [.12, .05, -.2, .3], [.02, 0, 0, .3]];            // head space: centre + radius
 const TRIPODS = [['Lfore', 'Rmid', 'Lhind'], ['Rfore', 'Lmid', 'Rhind']];
 
+// What the fly does: S.state, except it is dead (S.dead), or getting up after «слушать».
+const flyState = S => S.poster ? 'lost' : S.dead ? 'dead' : S.died && S.live && S.state === 'pressed' ? 'revive' : S.state;
+
 function createFlyAnimator(fly, screen, S) {
   const body = fly.body, head = fly.head, F = fly.group, L = fly.legs;
+  F.rotation.order = 'YXZ'; // the death roll turns around its own long axis
   const R1 = L.Rfore, REACH = .99 * (R1.len[0] + R1.len[1] + R1.len[2]);
-  const out = { touch: false, near: 0, push: 0, shake: 0, tail: 0 };
+  const out = { touch: false, near: 0, push: 0, shake: 0, tail: 0, die: 0 };
   const base = F.position.clone(), fwd = V(Math.cos(F.rotation.y), 0, -Math.sin(F.rotation.y));
   const sp = {}, val = { ...REST }, raw = { ...REST }, from = { ...REST };
   for (const c in SPR) sp[c] = new Spring(SPR[c][0], SPR[c][1], REST[c]);
@@ -1018,7 +1067,8 @@ function createFlyAnimator(fly, screen, S) {
   const ant = new Spring(500, .16), push = new Spring(6, 1), glow = new Spring(20, 1);
   let lastState = '', stateT = 0, idleT = 0, animT = 0, blend = 1, prevMusic = 0, hitDone = false, touched = false;
   let rubPh = 0, sweepPh = 0, hindPh = 0, prevWalk = REST.walk, gazeY = 0, gazeP = 0, lastQ = -1, lastGroup = 1, forceRun = false;
-  let lastSt = -1, stEx = 0, planted = false;
+  let lastSt = -1, stEx = 0, planted = false, deadWalk = REST.walk, fromDead = false;
+  const deadTip = V(), deadDir = V(), stand = new THREE.Matrix4();
 
   // Per-leg gait state: world anchor, current step (preallocated), lifted weight.
   const GAIT = Object.entries(L).map(([k, leg]) => ({
@@ -1047,6 +1097,11 @@ function createFlyAnimator(fly, screen, S) {
       return raw;
     }
     if (st === 'pressed') return stateT < PRESS_END ? sampleTL(PRESS, stateT, raw) : sampleTL(CONTENT, stateT - PRESS_END, raw);
+    if (st === 'dead') { sampleTL(DIE, stateT, raw); raw.walk = deadWalk; return raw; }
+    if (st === 'revive') {
+      if (!fromDead) return stateT < PRESS_END ? sampleTL(PRESS, stateT, raw) : sampleTL(CONTENT, stateT - PRESS_END, raw);
+      return stateT < REVIVE_END ? sampleTL(REVIVE, stateT, raw) : sampleTL(CONTENT, stateT - REVIVE_END, raw);
+    }
     return sampleTL(IDLE, idleT, raw);
   }
 
@@ -1110,13 +1165,15 @@ function createFlyAnimator(fly, screen, S) {
     }
   }
 
-  function tick(dt, worldT) {
-    const st = S.poster ? 'lost' : S.state;
+  function tick(dt, worldT, force) {
+    const st = force || flyState(S);
     if (st !== lastState) {
       Object.assign(from, val);
       // The replay and the press start from wherever the fly is; loops cross-fade into it.
       if (st === 'playing' && lastState !== 'paused') { enterTL(PLAY, val); ant.v += 9; hitDone = false; }
       if (st === 'pressed') { enterTL(PRESS, val); touched = false; }
+      if (st === 'dead') { enterTL(DIE, val); deadWalk = val.walk; ant.v += 12; }
+      if (st === 'revive') { fromDead = val.die > .5; enterTL(fromDead ? REVIVE : PRESS, val); touched = false; }
       blend = st === 'idle' ? 0 : 1;
       if (st === 'idle') idleT = 0;
       lastState = st; stateT = 0;
@@ -1164,6 +1221,13 @@ function createFlyAnimator(fly, screen, S) {
     body.scale.set(val.sq, thin, thin);
     body.updateMatrix();
     F.position.copy(base).addScaledVector(fwd, val.walk * FLY_SCALE);
+    // The feet stay planted where it stood (stance targets come from the upright frame), so the fall
+    // doesn't pop and it gets up onto its own feet.
+    F.rotation.x = 0; F.updateMatrixWorld(); stand.copy(F.matrixWorld);
+    // Dead: rolled onto its back around the long axis; the thorax rests on the desk, on its side half way.
+    const dd = clamp(val.die, 0, 1);
+    F.position.y += -.26 * dd - .2 * Math.sin(Math.PI * dd);
+    F.rotation.x = DEAD_ROLL * clamp(val.die, -.1, 1.15);
     F.updateMatrixWorld();
 
     // Targets in fly space. The aim stops short of the pill by the gap (the one this replay will end on).
@@ -1202,7 +1266,7 @@ function createFlyAnimator(fly, screen, S) {
       if (leg.kind === 'mid') g.want.x += val.mf;
       if (leg.kind === 'hind') g.want.x += val.hf;
       if (g.k === 'Rfore') g.want.x += val.ff;
-      g.wantW.copy(g.want); F.localToWorld(g.wantW);
+      g.wantW.copy(g.want).applyMatrix4(stand);
       if (!planted) g.anchor.copy(g.wantW);
       if (g.free > .001 && !g.step) g.anchor.copy(g.wantW); // a lifted leg lands where it should
     }
@@ -1240,7 +1304,7 @@ function createFlyAnimator(fly, screen, S) {
     // Place every tip (fly space) and tarsus direction.
     bodyPt(R1.hip.x, R1.hip.y, R1.hip.z, hipR);
     bodyPt(L.Lfore.hip.x, L.Lfore.hip.y, L.Lfore.hip.z, hipL);
-    const clock = st === 'playing' ? music : animT, pressing = st === 'pressed';
+    const clock = st === 'playing' ? music : animT, pressing = st === 'pressed' || (st === 'revive' && !fromDead);
     for (const g of GAIT) {
       const leg = g.leg;
       if (g.step) {
@@ -1276,11 +1340,31 @@ function createFlyAnimator(fly, screen, S) {
       leg.tip.y += Math.sin(Math.PI * w) * .1;
       leg.dir.lerp(fdir, w).normalize();
     }
+    // Dead legs: bent up over the belly, flailing (kick) and slowly curling in (curl); a rare twitch later.
+    const dw = clamp(val.die * 1.5, 0, 1);
+    if (dw > .001) {
+      const since = st === 'dead' ? stateT - DIE_END : -1, k = Math.floor(since / 8.3), tw = since - k * 8.3;
+      const twitch = since > 0 && !S.reduced && tw < .4 ? Math.sin(tw / .4 * Math.PI) : 0, twLeg = k % 6;
+      let i = 0;
+      for (const g of GAIT) {
+        const leg = g.leg, o = DEAD_LEG[leg.kind], s = leg.side, c = val.curl;
+        const ph = animT * (17 + i * 3.1) + i * 1.7, kk = val.kick * (leg.kind === 'fore' ? 1.2 : 1) * (S.reduced ? .3 : 1);
+        bodyPt(leg.hip.x + o[0] + kk * .17 * Math.sin(ph), leg.hip.y + o[1] * (1 - .28 * c) + kk * .1 * Math.cos(ph * 1.3),
+          leg.hip.z + s * (o[2] * (1 - .45 * c) + kk * .12 * Math.cos(ph)), deadTip);
+        if (i === twLeg && twitch) deadTip.x += .09 * twitch * Math.sin(tw * 60);
+        deadDir.set(leg.kind === 'hind' ? -.2 : .2, .55 + .3 * c, -s * .8).normalize();
+        leg.tip.lerp(deadTip, dw);
+        leg.dir.lerp(deadDir, dw).normalize();
+        leg.pole.copy(leg.poleBase);
+        i++;
+      }
+    }
     fly.solveLegs(avoid);
 
     // Antennae: whippy, lag behind the head, flick on the accents.
     const a = ant.to(0, sdt);
-    for (let i = 0; i < fly.antennae.length; i++) fly.antennae[i].rotation.z = a * .05 - val.an * .35 - .2 * clamp(val.rk, 0, 1) * val.fR + Math.sin(animT * 3 + i * 2) * .04;
+    const alive = 1 - clamp(val.die, 0, 1);
+    for (let i = 0; i < fly.antennae.length; i++) fly.antennae[i].rotation.z = a * .05 - val.an * .35 - .2 * clamp(val.rk, 0, 1) * val.fR + Math.sin(animT * 3 + i * 2) * .04 * alive;
     // Abdomen: counterbalances the thorax, lags behind it (follow-through), pumps with effort, breathes.
     fly.abdomen.rotation.z = .14 + val.abd - val.pitch * .45 + val.pump * .07 * Math.sin(animT * 7);
     const br = 1 + Math.sin(animT * 2.3) * .035 * val.br;
@@ -1288,10 +1372,10 @@ function createFlyAnimator(fly, screen, S) {
     // Wings open, rise in a V and buzz; halteres beat with them.
     for (const { pivot, side } of fly.wings) {
       pivot.rotation.y = side * val.wo * (side > 0 ? 1 : .55);
-      pivot.rotation.z = -val.wl * .55;
+      pivot.rotation.z = -val.wl * .55 + (side < 0 ? .3 * clamp(val.die, 0, 1) : 0); // dead: the near wing stays above the desk
       pivot.rotation.x = side * buzz * Math.sin(animT * 57 + side * 1.3) * .55;
     }
-    if (fly.halteres) for (const { pivot, side } of fly.halteres) pivot.rotation.z = Math.sin(animT * 61 + side) * (.06 + buzz * .9);
+    if (fly.halteres) for (const { pivot, side } of fly.halteres) pivot.rotation.z = Math.sin(animT * 61 + side) * (.06 * alive + buzz * .9);
     if (fly.proboscis) { fly.proboscis.scale.y = 1 + val.prob * .9; fly.proboscis.rotation.z = .62 - val.prob * .3; }
 
     // Feedback for the screen, the camera and the post-process.
@@ -1299,15 +1383,18 @@ function createFlyAnimator(fly, screen, S) {
     const bw = screen.buttonWorld;
     const dist = Math.hypot(Math.max(0, bw.x - screen.buttonHalfW - tipW.x), (tipW.y - bw.y) * 1.2, (tipW.z - SCREEN_Z) * 2);
     out.near = clamp(1 - dist / .5, 0, 1);
-    if (st === 'pressed' && val.rk > 1.08) touched = true;
-    out.touch = st === 'pressed' && touched;
+    if (pressing && val.rk > 1.08) touched = true;
+    out.touch = pressing && touched;
+    out.die = val.die;
     out.push = push.to(val.push, dt);
     out.tail = glow.to(val.glow, dt);
     out.shake = Math.max(0, out.shake - dt * 2.5);
   }
 
   out.update = (dt, worldT) => {
-    const st = S.poster ? 'lost' : S.state;
+    const st = flyState(S);
+    // Opened after 23:00: it is already lying there (and, after «слушать», gets up from there).
+    if (!lastState && S.died && !S.poster) for (let i = 0; i < 270; i++) tick(1 / 60, worldT, 'dead');
     // Arriving in the frozen pose without playing into it (a preview link, the poster,
     // a reload): fast-forward so the very first frame already shows the settled pose.
     if (st === 'lost' && lastState !== 'lost' && lastState !== 'playing') {
@@ -1329,7 +1416,7 @@ function createFlyAnimator(fly, screen, S) {
 //   FORE one line at a time, DOM text over the canvas (#mind-fore), cut on the grid of the track
 // The replay (excerpt E: 125 bpm, bar 1 at 0.48 s, last hit 13.92, dry cut S.cut, tail to S.dur)
 // decides what shows when; see MIND_ROWS. THOUGHTS is imported at the top of the file.
-import { CUES, DROP, AFTER, PRESSED } from './thoughts.js?v=7';
+import { CUES, DROP, AFTER, PRESSED } from './thoughts.js?v=8';
 
 const MIND_T = { beat: 60 / 125, att: 2.40, paw: 8.16, build: 12.00, eighth: 12.96, drop: 13.92 };
 MIND_T.bar = MIND_T.beat * 4;
@@ -1415,6 +1502,9 @@ class MindBag {
   }
 }
 
+// Inside a dead head it is the head after SIGNAL LOST, whatever the sound does.
+const mindState = S => S.dead ? 'lost' : S.state;
+
 class Mind {
   constructor(S) {
     this.S = S;
@@ -1431,7 +1521,7 @@ class Mind {
     this.rand = mindRng(seed); this.bgRand = mindRng(seed ^ 0x9e3779b9);
     this.foreBag = new MindBag(this.rand, S); this.bgBag = new MindBag(this.bgRand, S);
     this.midTex = new Map(); this.farTex = new Map(); this.pictUrls = new Map();
-    this.plan = null; this.lastT = 0; this.st = S.state; this.cur = null; this.logged = '';
+    this.plan = null; this.lastT = 0; this.st = mindState(S); this.cur = null; this.logged = '';
     this.blackUntil = -1; this.dropFlash = 0; this.dim = 1; this.pop = null;
     this.F = { x: .6, y0: -.15, y1: .15, top: 1, bot: -1, y: 400, lh: 36 };
     // Warm every glyph the textures use (₽, «», digits and Latin sit in other unicode-range subsets).
@@ -1499,9 +1589,9 @@ class Mind {
     this.camera.position.set(0, 0, 0);
     this.fov = 62; this.camera.fov = 62; this.camera.updateProjectionMatrix();
     this.speed = S.reduced ? .3 : .38; this.dim = 1; this.dropFlash = 0; this.blackUntil = -1;
-    this.st = S.state; this.cur = null; this.logged = ''; this.idleSlot = -1;
-    if (S.state === 'lost') this.startLost(1);            // re-entering after the cut starts from «ок.»
-    if (S.state === 'pressed') this.startPressed();
+    this.st = mindState(S); this.cur = null; this.logged = ''; this.idleSlot = -1;
+    if (this.st === 'lost') this.startLost(1);            // re-entering after the cut starts from «ок.»
+    if (this.st === 'pressed') this.startPressed();
     this.layout();
     this.fill();
     S.glitch?.(.6);
@@ -1539,7 +1629,7 @@ class Mind {
     this.linkT = 1;
   }
   section() {
-    const S = this.S, st = S.state, t = S.t || 0;
+    const S = this.S, st = mindState(S), t = S.t || 0;
     if (st === 'pressed') return 'pressed';
     if (st !== 'playing' && !(st === 'paused' && t > 0)) return 'idle';
     return t < MIND_T.att ? 'boot' : t < MIND_T.paw ? 'attempt' : t < MIND_T.build ? 'pawing' : 'build';
@@ -1698,7 +1788,7 @@ class Mind {
   /* ---- per frame */
   update(dt, wt) {
     if (!this.built) return;
-    const S = this.S, cam = this.camera, st = S.state, t = S.t || 0, R = S.reduced;
+    const S = this.S, cam = this.camera, st = mindState(S), t = S.t || 0, R = S.reduced;
     this.clock += dt; this.inT += dt;
     if (st !== this.st) {
       if (st === 'lost' && this.st === 'playing') {             // the dry cut: hard black, then the last cell talks
@@ -1814,7 +1904,7 @@ class Mind {
   }
 
   updateSprites(dt, playing, tail) {
-    const S = this.S, cam = this.camera, st = S.state, lost = st === 'lost', R = S.reduced;
+    const S = this.S, cam = this.camera, st = mindState(S), lost = st === 'lost', R = S.reduced;
     const tv = this.tanV(), ta = tv * cam.aspect, F = this.F, cz = cam.position.z;
     const fire = S.fire, flashAmp = R ? 0 : 2.5 * this.dropFlash;
     for (const sp of this.mid) {

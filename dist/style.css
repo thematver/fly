@@ -22,6 +22,13 @@ p { margin: 0; }
 
 #world { position: absolute; inset: 0; touch-action: none; cursor: grab; background: var(--bg) url(assets/poster.jpg) center / cover no-repeat; }
 #world:active { cursor: grabbing; }
+/* While the 3D loads (and without WebGL) the backdrop is the scene itself: from 23:00 the dead fly. */
+[data-dead] #world { background-image: url(assets/poster-dead.jpg); }
+/* Mourning ribbon across the top-right corner while the fly is dead: under the header text and the CRT lines. */
+.ribbon { position: absolute; z-index: 2; top: 0; right: 0; width: 260px; height: 260px; overflow: hidden; pointer-events: none; display: none; }
+.ribbon::before { content: ''; position: absolute; left: 50%; top: 50%; width: 420px; height: 40px; margin: -20px 0 0 -210px; transform: translate(45px, -45px) rotate(45deg); background: linear-gradient(#d9d9d9 0 2px, #000 2px 5px, #202020 5px 13px, #050505 13px 27px, #191919 27px 35px, #000 35px 38px, #d9d9d9 38px); box-shadow: 0 0 0 1px #000, 0 6px 18px #000; }
+[data-dead] .ribbon { display: block; animation: ribbon-in .6s steps(4) both; }
+@keyframes ribbon-in { 0% { opacity: 0; } }
 #world canvas { display: block; position: absolute; left: 0; top: 0; image-rendering: crisp-edges; image-rendering: pixelated; opacity: 0; transition: opacity .6s steps(4); }
 #world.ready canvas { opacity: 1; }
 #world.fallback canvas, #world.ctx-lost canvas { visibility: hidden; }
@@ -86,8 +93,8 @@ p { margin: 0; }
 .lost-line::before, .lost-line::after { content: attr(data-text); position: absolute; inset: 0; opacity: 0; pointer-events: none; white-space: pre-line; text-shadow: none; }
 .lost-line::before { color: #6ff3e6; }
 .lost-line::after { color: #f4f0ff; }
-[data-state="lost"] .lost-line::before { animation: glitch-idle-a 5.6s steps(1) 1.4s infinite; }
-[data-state="lost"] .lost-line::after { animation: glitch-idle-b 5.6s steps(1) 1.4s infinite; }
+[data-state="lost"] .lost-line::before, [data-dead] .lost-line::before { animation: glitch-idle-a 5.6s steps(1) 1.4s infinite; }
+[data-state="lost"] .lost-line::after, [data-dead] .lost-line::after { animation: glitch-idle-b 5.6s steps(1) 1.4s infinite; }
 .lost-line.glitch { animation: glitch-in .95s steps(1) both; }
 .lost-line.glitch::before { animation: glitch-a .95s steps(1) both; }
 .lost-line.glitch::after { animation: glitch-b .95s steps(1) both; }
@@ -155,10 +162,18 @@ button:focus-visible, a:focus-visible { outline: 3px solid #fff; outline-offset:
 [data-state="lost"] .lost-line, [data-state="pressed"] .lost-line { display: block; }
 [data-state="pressed"] .lost-line { color: var(--cyan); }
 [data-state="pressed"] .lost-line::before, [data-state="pressed"] .lost-line::after { content: none; }
+/* Presaved before midnight, still dead after it: the card asks to listen, so it is the dead card again. */
+[data-dead][data-live] .lost-line { color: var(--pink); }
+[data-dead][data-live] .lost-line::before, [data-dead][data-live] .lost-line::after { content: attr(data-text); }
 [data-state="lost"] .cta { animation: pulse .8s steps(2) infinite; }
 [data-state="lost"] #neural-title { color: var(--pink); animation: blink 1s steps(2) infinite; }
 [data-state="lost"] .neural-top > span:first-child { border-left-color: var(--pink); }
 [data-live] .lost-line { display: none; }
+/* From 23:00 the fly is dead: the card stays up, the HUD is a flat line. After «слушать» it gets up: «готово. муха слушает.» */
+[data-dead] .lost-line, [data-live][data-state="pressed"] .lost-line { display: block; }
+[data-dead]:not([data-state="pressed"]) .cta, [data-dead][data-live] .cta { animation: pulse .8s steps(2) infinite; }
+[data-dead] #neural-title { color: var(--pink); }
+[data-dead] .neural-top > span:first-child { border-left-color: var(--pink); }
 @keyframes pulse { 50% { box-shadow: 4px 4px 0 #244d56, 0 0 0 5px #80e8de66; background: #c9fff5; } }
 @keyframes blink { 50% { opacity: .35; } }
 
@@ -248,6 +263,8 @@ button:focus-visible, a:focus-visible { outline: 3px solid #fff; outline-offset:
   [data-peek] .neural { display: block; }
   .mind-fore { --px: 2px; }
   .mf { font-size: 20px; line-height: 1.25; }
+  .ribbon { width: 170px; height: 170px; }
+  .ribbon::before { height: 26px; margin-top: -13px; transform: translate(29px, -29px) rotate(45deg); background: linear-gradient(#d9d9d9 0 2px, #000 2px 4px, #202020 4px 9px, #050505 9px 17px, #191919 17px 22px, #000 22px 24px, #d9d9d9 24px); }
 }
 @media (max-width: 370px) {
   .cta small .long, #sound-text { display: none; }
@@ -269,8 +286,8 @@ button:focus-visible, a:focus-visible { outline: 3px solid #fff; outline-offset:
   #neural { height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  [data-state="lost"] .cta, [data-state="lost"] #neural-title, .lost-line, .lost-line::before, .lost-line::after { animation: none !important; }
-  .hint, .hint * { animation: none !important; }
+  [data-state="lost"] .cta, [data-dead] .cta, [data-dead][data-live] .cta, [data-state="lost"] #neural-title, .lost-line, .lost-line::before, .lost-line::after { animation: none !important; }
+  .hint, .hint *, .ribbon { animation: none !important; }
   .hint .r0 { opacity: .9; } .hint .r1 { opacity: .55; } .hint .r2 { opacity: .25; }
   #world canvas { transition: none; }
 }
