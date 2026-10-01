@@ -22,7 +22,7 @@ p { margin: 0; }
 
 #world { position: absolute; inset: 0; touch-action: none; cursor: grab; background: var(--bg) url(assets/poster.jpg) center / cover no-repeat; }
 #world:active { cursor: grabbing; }
-/* While the 3D loads (and without WebGL) the backdrop is the scene itself: from 23:00 the dead fly. */
+/* While the 3D loads (and without WebGL) the backdrop is the scene itself: from 22:00 the dead fly. */
 [data-dead] #world { background-image: url(assets/poster-dead.jpg); }
 /* Mourning ribbon across the top-right corner while the fly is dead: under the header text and the CRT lines. */
 .ribbon { position: absolute; z-index: 2; top: 0; right: 0; width: 260px; height: 260px; overflow: hidden; pointer-events: none; display: none; }
@@ -169,7 +169,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid #fff; outline-offset:
 [data-state="lost"] #neural-title { color: var(--pink); animation: blink 1s steps(2) infinite; }
 [data-state="lost"] .neural-top > span:first-child { border-left-color: var(--pink); }
 [data-live] .lost-line { display: none; }
-/* From 23:00 the fly is dead: the card stays up, the HUD is a flat line. After «слушать» it gets up: «готово. муха слушает.» */
+/* From 22:00 the fly is dead: the card stays up, the HUD is a flat line. After «слушать» it gets up: «готово. муха слушает.» */
 [data-dead] .lost-line, [data-live][data-state="pressed"] .lost-line { display: block; }
 [data-dead]:not([data-state="pressed"]) .cta, [data-dead][data-live] .cta { animation: pulse .8s steps(2) infinite; }
 [data-dead] #neural-title { color: var(--pink); }

@@ -1,6 +1,6 @@
-import * as THREE from './assets/three.module.js?v=8';
-import { createFly, FOOT_Y } from './fly.js?v=8';
-import { THOUGHTS } from './thoughts.js?v=8';
+import * as THREE from './assets/three.module.js?v=9';
+import { createFly, FOOT_Y } from './fly.js?v=9';
+import { THOUGHTS } from './thoughts.js?v=9';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const clamp = THREE.MathUtils.clamp;
@@ -1010,7 +1010,7 @@ const PRESS = timeline([
 ]);
 const PRESS_END = 4.8;
 
-/* 23:00, an hour before the release: it dies. A jolt, a last buzz, a stagger, falls on its back,
+/* 22:00, two hours before the release: it dies. A jolt, a last buzz, a stagger, falls on its back,
    the legs flail, slow down and curl up. Then it lies there; now and then a leg twitches. */
 const DIE = timeline([
   [0, .07, 'snap', {
@@ -1393,7 +1393,7 @@ function createFlyAnimator(fly, screen, S) {
 
   out.update = (dt, worldT) => {
     const st = flyState(S);
-    // Opened after 23:00: it is already lying there (and, after «слушать», gets up from there).
+    // Opened after 22:00: it is already lying there (and, after «слушать», gets up from there).
     if (!lastState && S.died && !S.poster) for (let i = 0; i < 270; i++) tick(1 / 60, worldT, 'dead');
     // Arriving in the frozen pose without playing into it (a preview link, the poster,
     // a reload): fast-forward so the very first frame already shows the settled pose.
@@ -1416,7 +1416,7 @@ function createFlyAnimator(fly, screen, S) {
 //   FORE one line at a time, DOM text over the canvas (#mind-fore), cut on the grid of the track
 // The replay (excerpt E: 125 bpm, bar 1 at 0.48 s, last hit 13.92, dry cut S.cut, tail to S.dur)
 // decides what shows when; see MIND_ROWS. THOUGHTS is imported at the top of the file.
-import { CUES, DROP, AFTER, PRESSED } from './thoughts.js?v=8';
+import { CUES, DROP, AFTER, PRESSED } from './thoughts.js?v=9';
 
 const MIND_T = { beat: 60 / 125, att: 2.40, paw: 8.16, build: 12.00, eighth: 12.96, drop: 13.92 };
 MIND_T.bar = MIND_T.beat * 4;

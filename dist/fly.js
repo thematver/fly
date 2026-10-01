@@ -1,4 +1,4 @@
-import * as THREE from './assets/three.module.js?v=8';
+import * as THREE from './assets/three.module.js?v=9';
 
 // Low-poly Drosophila with a small rig.
 // root  – sits on the desk; feet are planted in root space (y = FOOT_Y).
