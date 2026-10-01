@@ -2,9 +2,9 @@
 // button keep working even if WebGL or the 3D module fails to load.
 
 const RELEASE = Date.parse('2026-10-02T00:00:00+03:00');
-// Two hours before the release the fly dies: lies on its back, the HUD flatlines, the countdown keeps going.
+// An hour before the release the fly dies: lies on its back, the HUD flatlines, the countdown keeps going.
 // After the release it stays dead until the visitor presses «слушать» and comes back: then it gets up and listens.
-const DEATH = Date.parse('2026-10-01T22:00:00+03:00');
+const DEATH = Date.parse('2026-10-01T23:00:00+03:00');
 const PRESAVE = 'https://band.link/startend';
 // After the release the button leads to listening. BandLink turns the presave page into the release page
 // by itself; if the release gets its own smartlink, put it here.
@@ -42,7 +42,7 @@ const store = {
 // Shared state read by the scene every frame.
 const S = window.__fly = {
   state: 'idle', live: false, t: 0, dur: 16.3, cut: 14.1, bpm: 125, now,
-  // died: past 22:00 (time-based). dead: lying there right now (died, and nobody has pressed «слушать» for it yet).
+  // died: past 23:00 (time-based). dead: lying there right now (died, and nobody has pressed «слушать» for it yet).
   died: false, dead: false, listened: false,
   env: { low: 0, mid: 0, high: 0 }, fire: new Uint8Array(96),
   // ?replays=N fixes the attempt number (the gap shrinks with it) for recording clips.
@@ -111,7 +111,7 @@ function tick() {
   S.countdownShort = d ? `${d}д ${pad(h)}:${pad(m)}` : `${pad(h)}:${pad(m)}:${pad(s)}`;
   setTimeout(tick, 1000 - (t % 1000) + 10);
 }
-// The fly dies. With the page open at 22:00 it happens on screen (scene.js plays the fall);
+// The fly dies. With the page open at 23:00 it happens on screen (scene.js plays the fall);
 // opened later, it is already lying there.
 function die() {
   if (S.died) return;
@@ -273,7 +273,7 @@ function glitchLine() {
 }
 function render() {
   const st = S.state;
-  // Dead from 22:00 on. After the release, pressing «слушать» brings it back (for this visit).
+  // Dead from 23:00 on. After the release, pressing «слушать» brings it back (for this visit).
   // ?poster keeps the share frame (alive, a hair short of the button).
   const dead = S.died && !S.poster && !(S.live && (S.listened || store.get('ls', true)));
   if (dead !== S.dead) { S.dead = dead; if (dead) app.dataset.dead = ''; else delete app.dataset.dead; }
@@ -288,7 +288,7 @@ function render() {
   // Phones: short label, so the presave button keeps its one line.
   soundText.textContent = innerWidth < 801 ? (st === 'idle' ? 'реплей' : '') : labels[1];
   // Phones: three short lines instead of a long first one that would wrap on its own.
-  const gone = innerWidth < 801 ? 'муха померла\nза два часа до релиза.' : 'муха померла за два часа до релиза.';
+  const gone = innerWidth < 801 ? 'муха померла\nза час до релиза.' : 'муха померла за час до релиза.';
   const line = S.dead
     ? (S.live ? gone + '\nпослушай трек за неё.' : st === 'pressed' || store.get('ps', true) ? 'готово.\nмуха не узнает.' : gone + '\nпоставь пресейв за неё.')
     : st === 'pressed'
@@ -429,7 +429,7 @@ function measure() {
     : { top: title.bottom + 8, bottom: S.mobile ? bottom.top - 6 : Math.min(h, hud.top + hud.height * .45) };
   if (typeof placeGate === 'function' && !(gate.hidden && dragHint.hidden)) placeGate();
   // The SIGNAL LOST card sits high in the free band, clear of the fly's reach.
-  // Never closer to the header than half its own height: from 22:00 the card is up all the time, three lines on phones.
+  // Never closer to the header than half its own height: from 23:00 the card is up all the time, three lines on phones.
   const lineY = Math.max(S.safe.top + lostLine.offsetHeight / 2 + 4, S.safe.top + (S.safe.bottom - S.safe.top) * (S.mobile ? .13 : .16));
   app.style.setProperty('--line-y', Math.round(lineY) + 'px');
   S.onLayout?.();
@@ -452,9 +452,9 @@ measure();
 const warm = () => { audio.preload = 'auto'; };
 if (window.requestIdleCallback) requestIdleCallback(warm, { timeout: 3000 }); else setTimeout(warm, 1500);
 
-// Every module URL carries the release version (?v=9), so a 404 cached during a deploy can't stick.
+// Every module URL carries the release version (?v=10), so a 404 cached during a deploy can't stick.
 // If the scene still fails to load, try once more past any cache before falling back.
-import('./scene.js?v=9').catch(() => import('./scene.js?v=9&retry=' + Date.now())).then(m => m.init(world, S)).then(() => {
+import('./scene.js?v=10').catch(() => import('./scene.js?v=10&retry=' + Date.now())).then(m => m.init(world, S)).then(() => {
   if (Q.has('peek')) togglePeek(true); // ?peek: start inside the head (for clips)
 }).catch(err => {
   console.error(err);
