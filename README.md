@@ -45,7 +45,8 @@ mv dist/assets/excerpt.mp3 dist/assets/replay.mp3 && mv dist/assets/excerpt.json
 
 ## Перед публикацией
 
-1. Сайт живёт на GitHub Pages с доменом http://anomatver.ru/ (старый https://thematver.github.io/fly/ перенаправляет туда вместе с UTM). Деплой только через Actions: если в настройках Pages что-то менять (домен и т. п.), GitHub может запустить свою Jekyll-сборку корня репозитория, и вместо сайта откроется README. Тогда перезапустить workflow `pages`. Раньше было: https://thematver.github.io/fly/ (репозиторий https://github.com/thematver/fly, выкладка сама по пушу в `main`, см. `.github/workflows/pages.yml`). Когда привяжешь домен (Settings → Pages → Custom domain), замени `https://thematver.github.io/fly/` в `dist/index.html` на новый адрес (canonical, og:url, og:image, twitter:image). Без абсолютного адреса Telegram и VK не покажут картинку в превью.
+1. Сайт живёт на GitHub Pages с доменом https://anomatver.ru/ (HTTPS включён принудительно; старый https://thematver.github.io/fly/ перенаправляет туда вместе с UTM). Репозиторий https://github.com/thematver/fly, выкладка сама по пушу в `main`, см. `.github/workflows/pages.yml`. Деплой только через Actions: если в настройках Pages что-то менять (домен и т. п.), GitHub может запустить свою Jekyll-сборку корня репозитория, и вместо сайта откроется README. Тогда перезапустить workflow `pages`. Абсолютные адреса в `dist/index.html` (canonical, og:url, og:image, twitter:image) указывают на https://anomatver.ru/: без них Telegram и VK не покажут картинку в превью.
+   DNS домена на Cloudflare (NS `corey`/`eve.ns.cloudflare.com`, домен зарегистрирован в reg.ru). На DNS-серверы reg.ru (`ns*.hosting.reg.ru`) проверка GitHub не получала ответа (`Dnsruby::ResolvTimeout`), поэтому сертификат не выпускался. Записи в Cloudflare: четыре `A` для `@` на `185.199.108–111.153`, `CNAME www → thematver.github.io`, у всех **DNS only (серое облако)**. Оранжевое облако не включать: GitHub перестанет обновлять сертификат, а трафик через прокси Cloudflare в РФ режут (см. п. 3). Что видит GitHub: `gh api repos/thematver/fly/pages/health` (пока считает, отдаёт `{}`).
 2. Удалить с хостинга старый `assets/excerpt.mp3`, если он туда уже попадал: в нём припев целиком.
 3. Проверить, что сайт открывается из России без VPN на мобильном интернете (МТС, Билайн, МегаФон, Т2). Хостинги за Cloudflare в РФ сейчас режут. Надёжнее GitHub Pages, Yandex Object Storage или российский VPS.
 4. После каждой выкладки обновить превью ссылки: в Telegram через @WebpageBot, во ВКонтакте через `pages.clearCache`.
@@ -55,11 +56,11 @@ mv dist/assets/excerpt.mp3 dist/assets/replay.mp3 && mv dist/assets/excerpt.json
 
 Метку источника сайт сам передаёт в BandLink, поэтому в аналитике BandLink видно, откуда пришли пресейвы.
 
-- TikTok: `https://thematver.github.io/fly/?utm_source=tiktok`
-- Reels: `https://thematver.github.io/fly/?utm_source=reels`
-- Telegram: `https://thematver.github.io/fly/?utm_source=tg`
-- VK: `https://thematver.github.io/fly/?utm_source=vk`
-- Shorts: `https://thematver.github.io/fly/?utm_source=yt`
+- TikTok: `https://anomatver.ru/?utm_source=tiktok`
+- Reels: `https://anomatver.ru/?utm_source=reels`
+- Telegram: `https://anomatver.ru/?utm_source=tg`
+- VK: `https://anomatver.ru/?utm_source=vk`
+- Shorts: `https://anomatver.ru/?utm_source=yt`
 
 ## Режимы для проверки и съёмки
 
